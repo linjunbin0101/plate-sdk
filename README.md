@@ -97,3 +97,58 @@ class MyActivity : ComponentActivity() {
     }
 }
 ```
+
+## 开发者指南
+
+### 项目结构
+
+```
+plate-sdk/
+├── lib/                          # SDK 库模块
+│   ├── build.gradle.kts          # 库模块构建配置
+│   └── src/main/java/com/zkc/plate/
+│       ├── PlateConfig.kt        # 配置数据类
+│       └── PlateRecognizer.kt    # 核心识别逻辑
+├── build.gradle.kts              # 根构建文件
+├── settings.gradle.kts           # 模块声明
+├── jitpack.yml                   # JitPack 构建指令
+└── README.md
+```
+
+### 本地开发
+
+```bash
+# 编译验证
+./gradlew :lib:assembleRelease
+
+# 发布到本地 Maven（调试用）
+./gradlew :lib:publishToMavenLocal
+```
+
+### 发布新版本
+
+1. 修改 `lib/build.gradle.kts` 中的 `version`（如果需要调整版本号）
+2. 提交代码并推送到 GitHub：
+   ```bash
+   git add .
+   git commit -m "描述你的改动"
+   git push
+   ```
+3. 打新标签并推送：
+   ```bash
+   git tag 1.0.1
+   git push --tags
+   ```
+4. JitPack 会自动检测新 tag 并开始构建，完成后即可在 `https://jitpack.io/#linjunbin0101/plate-sdk` 看到新版本
+
+### 依赖关系
+
+```mermaid
+graph LR
+    A[androidPlate App] -->|com.github.linjunbin0101:plate-sdk| B[Plate SDK]
+    B -->|com.github.HyperInspire:hyperlpr3-android-sdk| C[HyperLPR3]
+```
+
+- **HyperLPR3**：底层车牌识别引擎，SDK 的唯一外部依赖
+- **Plate SDK**：对 HyperLPR3 的轻量封装，提供简洁的单例 API
+- **androidPlate App**：最终消费方，通过 JitPack 引入 SDK
