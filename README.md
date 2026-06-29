@@ -2,7 +2,7 @@
 
 轻量 Android 车牌识别 SDK，封装 [HyperLPR3](https://github.com/HyperInspire/hyperlpr3-android-sdk)。
 
-> **bitmap 进去，车牌号出来。**
+> **bitmap 进去，车牌号 + 坐标出来。**
 
 ## 安装
 
@@ -39,9 +39,40 @@ PlateRecognizer.init(context)
 
 // 识别（默认自动旋转重试，无需处理 bitmap 方向）
 val bitmap: Bitmap = ...
-val plates: List<String> = PlateRecognizer.getInstance().recognize(bitmap)
-// plates = ["粤A12345", "京B67890"]
+val plates: List<PlateResult> = PlateRecognizer.getInstance().recognize(bitmap)
+
+plates.forEach { plate ->
+    Log.i("Plate", "车牌: ${plate.number}, 置信度: ${plate.confidence}")
+    Log.i("Plate", "坐标: [${plate.x1}, ${plate.y1}, ${plate.x2}, ${plate.y2}]")
+}
 ```
+
+## 返回结果
+
+`recognize()` 返回 `List<PlateResult>`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `number` | `String` | 车牌号（如 `"粤A12345"`） |
+| `confidence` | `Float` | 识别置信度（0.0 ~ 1.0） |
+| `type` | `Int` | 车牌类型编码，见下方对照表 |
+| `x1, y1` | `Float` | 车牌矩形框左上角坐标 |
+| `x2, y2` | `Float` | 车牌矩形框右下角坐标 |
+
+> 坐标始终位于**原始输入 bitmap** 的坐标系内，已自动处理内部缩放和旋转重试的坐标映射。
+
+### 车牌类型编码
+
+| type | 含义 |
+|------|------|
+| `-1` | 未知 |
+| `0` | 蓝牌 |
+| `1` | 黄牌（单层） |
+| `2` | 白牌（单层） |
+| `3` | 绿牌（新能源） |
+| `4` | 黑牌（港澳） |
+| `5~8` | 香港/澳门（单层/双层） |
+| `9` | 黄牌（双层） |
 
 ## 配置
 
@@ -68,13 +99,18 @@ PlateRecognizer.init(context, PlateConfig(
 ## 注意事项
 
 1. **bitmap 方向**：默认已启用旋转重试（`enableRotationRetry = true`），传入任意方向的 bitmap 均可自动尝试识别。若需关闭可设为 `false`。
-2. **初始化**：`PlateRecognizer.init()` 只需调用一次，重复调用返回已有实例。
-3. **线程安全**：`recognize()` 可在任意线程调用。
-4. **内存**：每次 `recognize()` 内部会缩放 bitmap，原图不受影响。旋转重试产生的临时 bitmap 用完即释放。
+2. **坐标**：返回的坐标始终在原始输入 bitmap 坐标系内，可直接用于 `Canvas.drawRect()` 绘制边框。
+3. **初始化**：`PlateRecognizer.init()` 只需调用一次，重复调用返回已有实例。
+4. **线程安全**：`recognize()` 可在任意线程调用。
+5. **内存**：每次 `recognize()` 内部会缩放 bitmap，原图不受影响。旋转重试产生的临时 bitmap 用完即释放。
 
 ## 完整示例
 
 ```kotlin
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+
 class MyActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,12 +125,27 @@ class MyActivity : ComponentActivity() {
         takePhoto { bitmap ->
             val plates = PlateRecognizer.getInstance().recognize(bitmap)
             if (plates.isNotEmpty()) {
-                // 识别成功
-                Log.i("Plate", "识别到 ${plates.size} 块车牌: $plates")
+                plates.forEach { plate ->
+                    Log.i("Plate", "车牌: ${plate.number} 置信度: ${plate.confidence}")
+                    Log.i("Plate", "坐标: [${plate.x1},${plate.y1},${plate.x2},${plate.y2}]")
+                }
+                // 在原图上画框
+                drawBoxes(bitmap, plates)
             } else {
-                // 未识别到
                 Log.w("Plate", "未识别到车牌")
             }
+        }
+    }
+
+    private fun drawBoxes(bitmap: Bitmap, plates: List<PlateResult>) {
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+        }
+        plates.forEach { plate ->
+            canvas.drawRect(plate.x1, plate.y1, plate.x2, plate.y2, paint)
         }
     }
 }
@@ -110,7 +161,8 @@ plate-sdk/
 │   ├── build.gradle.kts          # 库模块构建配置
 │   └── src/main/java/com/zkc/plate/
 │       ├── PlateConfig.kt        # 配置数据类
-│       └── PlateRecognizer.kt    # 核心识别逻辑
+│       ├── PlateRecognizer.kt    # 核心识别逻辑
+│       └── PlateResult.kt        # 识别结果（含坐标）
 ├── build.gradle.kts              # 根构建文件
 ├── settings.gradle.kts           # 模块声明
 ├── jitpack.yml                   # JitPack 构建指令
