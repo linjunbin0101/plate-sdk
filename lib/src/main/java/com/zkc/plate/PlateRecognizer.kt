@@ -2,6 +2,7 @@ package com.zkc.plate
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.util.Log
 import com.hyperai.hyperlpr3.HyperLPR3
 import com.hyperai.hyperlpr3.bean.HyperLPRParameter
@@ -57,22 +58,60 @@ class PlateRecognizer private constructor(private val config: PlateConfig) {
 
     /**
      * Recognize license plates from a bitmap.
-     * The bitmap should be pre-rotated to upright orientation by the caller.
+     *
+     * When [PlateConfig.enableRotationRetry] is true, the image is tried at 0°, 90°, 180°, and 270°
+     * rotation until plates are found or all angles are exhausted.
      *
      * @param bitmap  input image (any resolution, will be scaled down automatically)
      * @return list of plate numbers (e.g. ["粤A12345", "京B67890"]), empty if none found
      */
     fun recognize(bitmap: Bitmap): List<String> {
+        if (!config.enableRotationRetry) {
+            return doRecognize(bitmap, "0°")
+        }
+
+        val angles = intArrayOf(0, 90, 180, 270)
+        for (angle in angles) {
+            if (angle == 0) {
+                val result = doRecognize(bitmap, "0°")
+                if (result.isNotEmpty()) return result
+            } else {
+                var rotated: Bitmap? = null
+                try {
+                    rotated = rotateBitmap(bitmap, angle.toFloat())
+                    val result = doRecognize(rotated, "${angle}°")
+                    if (result.isNotEmpty()) return result
+                } finally {
+                    rotated?.recycle()
+                }
+            }
+        }
+        return emptyList()
+    }
+
+    // ── internal helpers ────────────────────────────────────────────
+
+    /** Single-pass recognition on an upright bitmap. */
+    private fun doRecognize(bitmap: Bitmap, tag: String): List<String> {
         val scaledW = config.roiImageWidth
         val scaledH = (bitmap.height.toFloat() / bitmap.width * scaledW).toInt().coerceAtLeast(1)
         val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
 
         val plates = HyperLPR3.getInstance().plateRecognition(
             scaledBitmap,
-            0,  // bitmap should be upright — caller handles rotation
+            0,
             HyperLPR3.STREAM_BGRA
         )
 
-        return plates.map { it.code }.filter { it.isNotBlank() }
+        val result = plates.map { it.code }.filter { it.isNotBlank() }
+        Log.d(Companion.TAG, "recognize ($tag) → ${result.size} plate(s)")
+        return result
+    }
+
+    /** Rotate bitmap by [degrees] clockwise, returning a new Bitmap. */
+    private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+        val matrix = Matrix()
+        matrix.postRotate(degrees)
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 }

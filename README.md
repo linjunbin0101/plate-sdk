@@ -37,8 +37,8 @@ import com.zkc.plate.PlateRecognizer
 // 初始化（只需一次，通常在 Application 或 Activity 中）
 PlateRecognizer.init(context)
 
-// 识别
-val bitmap: Bitmap = ...  // 确保已旋转到正向
+// 识别（默认自动旋转重试，无需处理 bitmap 方向）
+val bitmap: Bitmap = ...
 val plates: List<String> = PlateRecognizer.getInstance().recognize(bitmap)
 // plates = ["粤A12345", "京B67890"]
 ```
@@ -53,6 +53,7 @@ PlateRecognizer.init(context, PlateConfig(
     maxPlates            = 5,                              // 默认 5
     confidenceThreshold  = 0.7f,                           // 默认 0.7
     roiImageWidth        = 640,                            // 默认 640
+    enableRotationRetry  = true,                           // 默认 true
 ))
 ```
 
@@ -62,13 +63,14 @@ PlateRecognizer.init(context, PlateConfig(
 | `maxPlates` | `Int` | `5` | 单张图最多返回几块车牌 |
 | `confidenceThreshold` | `Float` | `0.7` | 置信度阈值（0 ~ 1），越高越严格 |
 | `roiImageWidth` | `Int` | `640` | 识别前图片缩放宽，值越小越快但可能影响精度 |
+| `enableRotationRetry` | `Boolean` | `true` | 识别不到时自动旋转 90°/180°/270° 重试 |
 
 ## 注意事项
 
-1. **bitmap 方向**：传入的 bitmap 必须已旋转到正向（`rotationDegrees` = 0），SDK 内部不做旋转处理。
+1. **bitmap 方向**：默认已启用旋转重试（`enableRotationRetry = true`），传入任意方向的 bitmap 均可自动尝试识别。若需关闭可设为 `false`。
 2. **初始化**：`PlateRecognizer.init()` 只需调用一次，重复调用返回已有实例。
 3. **线程安全**：`recognize()` 可在任意线程调用。
-4. **内存**：每次 `recognize()` 内部会缩放 bitmap，原图不受影响。
+4. **内存**：每次 `recognize()` 内部会缩放 bitmap，原图不受影响。旋转重试产生的临时 bitmap 用完即释放。
 
 ## 完整示例
 

@@ -18,4 +18,7 @@ data class PlateConfig(
 
     /** Image width to scale input bitmap to before recognition */
     val roiImageWidth: Int = 640,
+
+    /** When true, retry with 90°/180°/270° rotation if initial detection yields no result */
+    val enableRotationRetry: Boolean = true,
 )
